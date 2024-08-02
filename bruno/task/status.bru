@@ -1,0 +1,17 @@
+meta {
+  name: status
+  type: http
+  seq: 14
+}
+
+post {
+  url: http://127.0.0.1:3000/api/v1/task/status
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "task_id":"7212042419594989569"
+  }
+}
