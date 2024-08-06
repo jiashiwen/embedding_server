@@ -1,36 +1,62 @@
+use std::collections::HashMap;
+
 use axum::Json;
+use qdrant_client::qdrant::{ScoredPoint, SearchPoints, Value};
+use uuid::Uuid;
 
 use crate::{
-    embedding::{get_token, model_device_is_cuda},
+    embedding::{embedding_setence, retriever::retriever},
     httpserver::{
         exception::{AppError, AppErrorType},
-        module::{ReqContent, Response},
+        module::{module_retriever::RespRetriever, ReqContent, ReqRetriever, Response},
     },
 };
 
 use super::HandlerResult;
 
-pub async fn device_is_cuda() -> HandlerResult<bool> {
-    Ok(Json(Response::ok(model_device_is_cuda().await)))
-
-    // match service_task_create(&mut task) {
-    //     Ok(id) => Ok(Json(Response::ok(TaskId {
-    //         task_id: id.to_string(),
-    //     }))),
-    //     Err(e) => {
-    //         let err = AppError {
-    //             message: Some(e.to_string()),
-    //             cause: None,
-    //             error_type: AppErrorType::UnknowErr,
-    //         };
-    //         return Err(err);
-    //     }
-    // }
+pub async fn handler_embedding(Json(req): Json<ReqContent>) -> HandlerResult<Vec<Vec<f32>>> {
+    match embedding_setence(&req.content).await {
+        Ok(token) => Ok(Json(Response::ok(token))),
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
+        }
+    }
 }
 
-pub async fn embedding(Json(req): Json<ReqContent>) -> HandlerResult<Vec<Vec<f32>>> {
-    match get_token(&req.content).await {
-        Ok(token) => Ok(Json(Response::ok(token))),
+pub async fn handler_retriever(
+    Json(req): Json<ReqRetriever>,
+    // ) -> HandlerResult<HashMap<String, Value>> {
+) -> HandlerResult<Vec<RespRetriever>> {
+    match retriever(&req.content, req.limit).await {
+        Ok(r) => {
+            // let resp = r.result[0].payload.clone();
+            let mut vec_resp = vec![];
+            for p in r.result {
+                let id = match p.id {
+                    Some(pid) => match pid.point_id_options {
+                        Some(pido) => match pido {
+                            qdrant_client::qdrant::point_id::PointIdOptions::Num(n) => {
+                                n.to_string()
+                            }
+                            qdrant_client::qdrant::point_id::PointIdOptions::Uuid(s) => s,
+                        },
+                        None => "".to_string(),
+                    },
+                    None => "".to_string(),
+                };
+
+                let payload = p.payload.clone();
+                let score = p.score;
+                let resp = RespRetriever { id, payload, score };
+                vec_resp.push(resp);
+            }
+            Ok(Json(Response::ok(vec_resp)))
+        }
         Err(e) => {
             let err = AppError {
                 message: Some(e.to_string()),

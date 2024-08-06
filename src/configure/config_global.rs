@@ -1,3 +1,5 @@
+use super::config_qdrant::ConfigQdrant;
+use super::{config_http::ConfigHttp, config_model::ConfigModel};
 use crate::configure::config_error::{ConfigError, ConfigErrorType};
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -15,110 +17,28 @@ pub static GLOBAL_CONFIG: Lazy<RwLock<Config>> = Lazy::new(|| {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(default = "Config::http_default")]
-    pub http: HttpConfig,
-    pub model: ModelConfig,
-    pub rocksdb: RocksDBConfig,
+    pub http: ConfigHttp,
+    #[serde(default = "ConfigModel::default")]
+    pub model: ConfigModel,
+    #[serde(default = "ConfigQdrant::default")]
+    pub qdrant: ConfigQdrant,
 }
 
 impl Config {
     pub fn default() -> Self {
         Self {
-            http: HttpConfig::default(),
-            model: ModelConfig::default(),
-            rocksdb: RocksDBConfig::default(),
+            http: ConfigHttp::default(),
+            model: ConfigModel::default(),
+            qdrant: ConfigQdrant::default(),
         }
     }
 
-    pub fn http_default() -> HttpConfig {
-        HttpConfig::default()
+    pub fn http_default() -> ConfigHttp {
+        ConfigHttp::default()
     }
 
     pub fn get_config_image(&self) -> Self {
         self.clone()
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct HttpConfig {
-    #[serde(default = "HttpConfig::port_default")]
-    pub port: u16,
-    #[serde(default = "HttpConfig::bind_default")]
-    pub bind: String,
-}
-
-impl Default for HttpConfig {
-    fn default() -> Self {
-        Self {
-            port: HttpConfig::port_default(),
-            bind: HttpConfig::bind_default(),
-        }
-    }
-}
-
-impl HttpConfig {
-    pub fn port_default() -> u16 {
-        3000
-    }
-    pub fn bind_default() -> String {
-        "::0".to_string()
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct RocksDBConfig {
-    #[serde(default = "RocksDBConfig::path_default")]
-    pub path: String,
-}
-
-impl RocksDBConfig {
-    pub fn path_default() -> String {
-        "rocksdb".to_string()
-    }
-}
-
-impl Default for RocksDBConfig {
-    fn default() -> Self {
-        Self {
-            path: RocksDBConfig::path_default(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct ModelConfig {
-    #[serde(default = "ModelConfig::model_id_default")]
-    pub model_id: String,
-    #[serde(default = "ModelConfig::revision_default")]
-    pub revision: String,
-    #[serde(default = "ModelConfig::use_pth_default")]
-    pub use_pth: bool,
-    #[serde(default = "ModelConfig::approximate_gelu_default")]
-    pub approximate_gelu: bool,
-}
-
-impl Default for ModelConfig {
-    fn default() -> Self {
-        Self {
-            model_id: Self::model_id_default(),
-            revision: Self::revision_default(),
-            use_pth: Self::use_pth_default(),
-            approximate_gelu: Self::approximate_gelu_default(),
-        }
-    }
-}
-
-impl ModelConfig {
-    fn model_id_default() -> String {
-        "moka-ai/m3e-large".to_string()
-    }
-    fn revision_default() -> String {
-        "main".to_string()
-    }
-    fn use_pth_default() -> bool {
-        true
-    }
-    fn approximate_gelu_default() -> bool {
-        false
     }
 }
 

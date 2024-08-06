@@ -19,3 +19,9 @@ pub struct ReqScan {
 pub struct ReqContent {
     pub content: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ReqRetriever {
+    pub content: String,
+    pub limit: u64,
+}

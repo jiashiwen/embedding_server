@@ -1,5 +1,4 @@
 mod init_resources;
-mod resource_rocksdb;
+pub mod resource_qdrant;
 
 pub use init_resources::*;
-pub use resource_rocksdb::*;

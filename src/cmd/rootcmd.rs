@@ -104,20 +104,20 @@ fn cmd_match(matches: &ArgMatches) {
         println!("current pid is:{}", std::process::id());
 
         //启动公共 tokio runtime
-        // GLOBAL_TASK_RUNTIME.block_on(async {
-        //     log::info!("global runtime start!");
-        //     log::info!(
-        //         "GLOBAL_TASKS_EXEC_JOINSET len:{}",
-        //         GLOBAL_TASKS_EXEC_JOINSET.len()
-        //     );
-        // });
-
-        // 初始化外部资源
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
+        GLOBAL_RUNTIME.block_on(async {
+            log::info!("global runtime start!");
+            // 启动全局资源
             init_resources().await.unwrap();
+            // 加载model
             GLOBAL_MODEL.get_or_init(init_model_and_tokenizer).await;
         });
+
+        // 初始化外部资源
+        // let rt = Runtime::new().unwrap();
+        // rt.block_on(async {
+        //     init_resources().await.unwrap();
+        //     GLOBAL_MODEL.get_or_init(init_model_and_tokenizer).await;
+        // });
 
         // rt.spawn(async move { init_tasks_status_server().await });
 
@@ -177,8 +177,6 @@ fn cmd_match(matches: &ArgMatches) {
 
     if let Some(ref _matches) = matches.subcommand_matches("stop") {
         println!("server stopping...");
-
-        // let sys = System::new_with_specifics(RefreshKind::everything().without_disks_list());
         let sys =
             System::new_with_specifics(RefreshKind::everything().without_cpu().without_memory());
         let pidstr = String::from_utf8(fs::read("pid").unwrap()).unwrap();

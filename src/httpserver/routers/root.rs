@@ -1,4 +1,4 @@
-use crate::httpserver::handlers::{current_config, device_is_cuda, embedding, root};
+use crate::httpserver::handlers::{current_config, handler_embedding, handler_retriever, root};
 
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
@@ -31,8 +31,8 @@ pub fn router_root() -> Router {
 
     let api = Router::new()
         .route("/v1/currentconfig", post(current_config))
-        .route("/v1/deviceiscuda", post(device_is_cuda))
-        .route("/v1/embedding", post(embedding))
+        .route("/v1/embedding", post(handler_embedding))
+        .route("/v1/retriever", post(handler_retriever))
         .layer(middleware_stack.clone())
         .nest("/v1/task", task_router);
 

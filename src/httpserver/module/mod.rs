@@ -1,4 +1,5 @@
 mod common_module;
+pub mod module_retriever;
 mod module_task;
 mod request_module;
 mod response_module;
