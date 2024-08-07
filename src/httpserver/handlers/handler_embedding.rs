@@ -5,7 +5,7 @@ use qdrant_client::qdrant::{ScoredPoint, SearchPoints, Value};
 use uuid::Uuid;
 
 use crate::{
-    embedding::{embedding_setence, retriever::retriever},
+    embedding::{answer::answer, embedding_setence, retriever::retriever},
     httpserver::{
         exception::{AppError, AppErrorType},
         module::{module_retriever::RespRetriever, ReqContent, ReqRetriever, Response},
@@ -28,13 +28,9 @@ pub async fn handler_embedding(Json(req): Json<ReqContent>) -> HandlerResult<Vec
     }
 }
 
-pub async fn handler_retriever(
-    Json(req): Json<ReqRetriever>,
-    // ) -> HandlerResult<HashMap<String, Value>> {
-) -> HandlerResult<Vec<RespRetriever>> {
+pub async fn handler_retriever(Json(req): Json<ReqRetriever>) -> HandlerResult<Vec<RespRetriever>> {
     match retriever(&req.content, req.limit).await {
         Ok(r) => {
-            // let resp = r.result[0].payload.clone();
             let mut vec_resp = vec![];
             for p in r.result {
                 let id = match p.id {
@@ -57,6 +53,20 @@ pub async fn handler_retriever(
             }
             Ok(Json(Response::ok(vec_resp)))
         }
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
+        }
+    }
+}
+
+pub async fn handler_answer(Json(req): Json<ReqRetriever>) -> HandlerResult<String> {
+    match answer(&req.content, req.limit as usize) {
+        Ok(s) => Ok(Json(Response::ok(s))),
         Err(e) => {
             let err = AppError {
                 message: Some(e.to_string()),

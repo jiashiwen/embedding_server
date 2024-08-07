@@ -21,7 +21,7 @@ pub static GLOBAL_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
     Arc::new(runtime)
 });
 
-pub static GLOBAL_MODEL: OnceCell<Arc<(BertModel, Tokenizer)>> = OnceCell::const_new();
+pub static GLOBAL_EMBEDDING_MODEL: OnceCell<Arc<(BertModel, Tokenizer)>> = OnceCell::const_new();
 
 fn init_runtime() -> Result<Runtime> {
     let rt = Builder::new_multi_thread()
@@ -39,7 +39,6 @@ pub async fn init_model_and_tokenizer() -> Arc<(BertModel, Tokenizer)> {
 }
 
 async fn build_model_and_tokenizer(model_config: &ConfigModel) -> Result<(BertModel, Tokenizer)> {
-    // let device = candle_examples::device(self.cpu)?;
     let device = Device::new_cuda(0)?;
     let repo = Repo::with_revision(
         model_config.model_id.clone(),
@@ -75,7 +74,7 @@ async fn build_model_and_tokenizer(model_config: &ConfigModel) -> Result<(BertMo
 }
 
 pub async fn embedding_setence(content: &str) -> Result<Vec<Vec<f32>>> {
-    let m_t = GLOBAL_MODEL.get().unwrap();
+    let m_t = GLOBAL_EMBEDDING_MODEL.get().unwrap();
     let tokens = m_t
         .1
         .encode(content, true)

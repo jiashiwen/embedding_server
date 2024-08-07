@@ -1,4 +1,6 @@
-use crate::httpserver::handlers::{current_config, handler_embedding, handler_retriever, root};
+use crate::httpserver::handlers::{
+    current_config, handler_answer, handler_embedding, handler_retriever, root,
+};
 
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
@@ -33,6 +35,7 @@ pub fn router_root() -> Router {
         .route("/v1/currentconfig", post(current_config))
         .route("/v1/embedding", post(handler_embedding))
         .route("/v1/retriever", post(handler_retriever))
+        .route("/v1/answer", post(handler_answer))
         .layer(middleware_stack.clone())
         .nest("/v1/task", task_router);
 

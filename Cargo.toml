@@ -49,6 +49,7 @@ candle-transformers = { git = "https://github.com/huggingface/candle.git" }
 tokenizers = "0.19.1"
 tracing-chrome = "0.7.2"
 hf-hub = { version = "0.3.2", features = ["tokio"] }
+# hf-hub = { path = "../hf-hub", features = ["tokio"] }
 
 # sudo apt update && sudo apt upgrade
 # sudo apt install clang

@@ -1,9 +1,10 @@
 use crate::cmd::{new_config_cmd, new_start_cmd, new_stop_cmd};
-
 use crate::configure::generate_default_config;
 use crate::configure::{get_config, get_current_config_yml, set_config};
-
-use crate::embedding::{init_model_and_tokenizer, GLOBAL_MODEL, GLOBAL_RUNTIME};
+use crate::embedding::answer::{
+    init_global_pipeline, init_inference_model, GLOBAL_INFERENCE_MODEL, GLOBAL_PIPELINE,
+};
+use crate::embedding::{init_model_and_tokenizer, GLOBAL_EMBEDDING_MODEL, GLOBAL_RUNTIME};
 use crate::httpserver;
 use crate::resources::init_resources;
 use clap::{Arg, ArgAction, ArgMatches};
@@ -18,7 +19,7 @@ use std::str::FromStr;
 use std::{env, fs, thread};
 use sysinfo::{Pid, RefreshKind, System};
 use tokio::net::TcpListener;
-use tokio::runtime::{self, Runtime};
+use tokio::runtime::{self};
 
 lazy_static! {
     static ref CLIAPP: clap::Command = clap::Command::new("serverframe-rs")
@@ -109,17 +110,14 @@ fn cmd_match(matches: &ArgMatches) {
             // 启动全局资源
             init_resources().await.unwrap();
             // 加载model
-            GLOBAL_MODEL.get_or_init(init_model_and_tokenizer).await;
+            GLOBAL_EMBEDDING_MODEL
+                .get_or_init(init_model_and_tokenizer)
+                .await;
+            GLOBAL_PIPELINE.get_or_init(init_global_pipeline).await;
+            GLOBAL_INFERENCE_MODEL
+                .get_or_init(init_inference_model)
+                .await;
         });
-
-        // 初始化外部资源
-        // let rt = Runtime::new().unwrap();
-        // rt.block_on(async {
-        //     init_resources().await.unwrap();
-        //     GLOBAL_MODEL.get_or_init(init_model_and_tokenizer).await;
-        // });
-
-        // rt.spawn(async move { init_tasks_status_server().await });
 
         let async_http_server = async {
             let config = get_config().unwrap();
