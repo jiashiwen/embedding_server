@@ -1,4 +1,4 @@
-use anyhow::{Context, Error as E, Result};
+use anyhow::{anyhow, Context, Error as E, Result};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
@@ -6,42 +6,41 @@ use candle_transformers::models::qwen2::{Config as ConfigBase, ModelForCausalLM 
 use candle_transformers::models::qwen2_moe::{Config as ConfigMoe, Model as ModelMoe};
 use hf_hub::api::tokio::ApiBuilder;
 use hf_hub::{Repo, RepoType};
-
 use std::sync::{Arc, RwLock};
 use tokenizers::Tokenizer;
 use tokio::sync::OnceCell;
 
 use super::token_output_stream::TokenOutputStream;
 
-pub const MODEL_ID: &'static str = "Qwen/Qwen2-1.5B";
+pub const MODEL_ID: &'static str = "Qwen/Qwen2-7B";
 // pub static GLOBAL_INFERENCE_MODEL: OnceCell<Arc<RwLock<ModelBase>>> = OnceCell::const_new();
-pub static GLOBAL_INFERENCE_MODEL: OnceCell<RwLock<ModelBase>> = OnceCell::const_new();
+// pub static GLOBAL_INFERENCE_MODEL: OnceCell<RwLock<ModelBase>> = OnceCell::const_new();
 pub static GLOBAL_PIPELINE: OnceCell<Arc<RwLock<TextGeneration>>> = OnceCell::const_new();
 
-pub async fn init_inference_model() -> RwLock<ModelBase> {
-    let model = build_inference_model().await.unwrap();
-    RwLock::new(model)
-}
+// pub async fn init_inference_model() -> RwLock<ModelBase> {
+//     let model = build_inference_model().await.unwrap();
+//     RwLock::new(model)
+// }
 
-pub async fn build_inference_model() -> Result<ModelBase> {
-    let device = Device::new_cuda(0)?;
-    let api = ApiBuilder::new().build()?;
-    let repo = api.repo(Repo::with_revision(
-        MODEL_ID.to_string(),
-        RepoType::Model,
-        "main".to_string(),
-    ));
+// pub async fn build_inference_model() -> Result<ModelBase> {
+//     let device = Device::new_cuda(0)?;
+//     let api = ApiBuilder::new().build()?;
+//     let repo = api.repo(Repo::with_revision(
+//         MODEL_ID.to_string(),
+//         RepoType::Model,
+//         "main".to_string(),
+//     ));
 
-    let filenames = vec![repo.get("model.safetensors").await?];
-    let dtype = DType::BF16;
-    let config_file = repo.get("config.json").await?;
+//     let filenames = vec![repo.get("model.safetensors").await?];
+//     let dtype = DType::BF16;
+//     let config_file = repo.get("config.json").await?;
 
-    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
-    let config: ConfigBase = serde_json::from_slice(&std::fs::read(config_file)?)?;
-    // let model = Model::Base(ModelBase::new(&config, vb)?);
-    let model = ModelBase::new(&config, vb)?;
-    Ok(model)
-}
+//     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
+//     let config: ConfigBase = serde_json::from_slice(&std::fs::read(config_file)?)?;
+//     // let model = Model::Base(ModelBase::new(&config, vb)?);
+//     let model = ModelBase::new(&config, vb)?;
+//     Ok(model)
+// }
 
 pub async fn init_global_pipeline() -> Arc<RwLock<TextGeneration>> {
     let pipeline = build_pipeline().await.unwrap();
@@ -60,33 +59,41 @@ pub async fn build_pipeline() -> Result<TextGeneration> {
     let tokenizer_filename = repo.get("tokenizer.json").await?;
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
     // let filenames = vec![repo.get("model.safetensors").await?];
-    // let dtype = DType::BF16;
-    // let config_file = repo.get("config.json").await?;
+    let filenames = hub_load_safetensors(&repo, "model.safetensors.index.json").await?;
+    let dtype = DType::BF16;
+    let config_file = repo.get("config.json").await?;
 
-    // let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
-    // let config: ConfigBase = serde_json::from_slice(&std::fs::read(config_file)?)?;
-    // let model = Model::Base(ModelBase::new(&config, vb)?);
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
+    let config: ConfigBase = serde_json::from_slice(&std::fs::read(config_file)?)?;
+    let model = Model::Base(ModelBase::new(&config, vb)?);
 
-    // let pipeline = TextGeneration::new(model, tokenizer, 299792458, None, None, 1.1, 64, &device);
-    let pipeline = TextGeneration::new(tokenizer, 299792458, None, None, 1.1, 64, &device);
+    let pipeline = TextGeneration::new(model, tokenizer, 299792458, None, None, 1.1, 64, &device);
+
     Ok(pipeline)
 }
 
-// pub enum Model {
-//     Base(ModelBase),
-//     Moe(ModelMoe),
-// }
+pub enum Model {
+    Base(ModelBase),
+    Moe(ModelMoe),
+}
 
-// impl Model {
-//     fn forward(&mut self, xs: &Tensor, s: usize) -> candle_core::Result<Tensor> {
-//         match self {
-//             Self::Moe(ref mut m) => m.forward(xs, s),
-//             Self::Base(ref mut m) => m.forward(xs, s),
-//         }
-//     }
-// }
+impl Model {
+    fn forward(&mut self, xs: &Tensor, s: usize) -> candle_core::Result<Tensor> {
+        match self {
+            Self::Moe(ref mut m) => m.forward(xs, s),
+            Self::Base(ref mut m) => m.forward(xs, s),
+        }
+    }
+
+    pub fn clear_kv_cache(&mut self) {
+        match self {
+            Model::Base(ref mut m) => m.clear_kv_cache(),
+            Model::Moe(ref mut m) => m.clear_kv_cache(),
+        }
+    }
+}
 pub struct TextGeneration {
-    // model: Model,
+    model: Model,
     device: Device,
     tokenizer: TokenOutputStream,
     logits_processor: LogitsProcessor,
@@ -96,7 +103,7 @@ pub struct TextGeneration {
 impl TextGeneration {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        // model: Model,
+        model: Model,
         tokenizer: Tokenizer,
         seed: u64,
         temp: Option<f64>,
@@ -107,7 +114,7 @@ impl TextGeneration {
     ) -> Self {
         let logits_processor = LogitsProcessor::new(seed, temp, top_p);
         Self {
-            // model,
+            model,
             tokenizer: TokenOutputStream::new(tokenizer),
             logits_processor,
             repeat_penalty,
@@ -127,15 +134,6 @@ impl TextGeneration {
             .map_err(E::msg)?
             .get_ids()
             .to_vec();
-        // for &t in tokens.iter() {
-        //     if let Some(t) =
-        //         self.tokenizer
-        //             .next_token(t)
-        //             .context(format!("{}:{}", file!(), line!()))?
-        //     {
-        //         print!("{t}")
-        //     }
-        // }
 
         let mut generated_tokens = 0usize;
         let eos_token = match self.tokenizer.get_token("<|endoftext|>") {
@@ -150,26 +148,12 @@ impl TextGeneration {
             let input = Tensor::new(ctxt, &self.device)?
                 .unsqueeze(0)
                 .context(format!("{}:{}", file!(), line!()))?;
-            // let logits = self.model.forward(&input, start_pos).context(format!(
-            //     "{}:{}",
-            //     file!(),
-            //     line!()
-            // ))?;
-            // let logits = GLOBAL_INFERENCE_MODEL
-            //     .get()
-            //     .unwrap()
-            //     .write()
-            //     .unwrap()
-            //     .forward(&input, start_pos)
-            //     .context(format!("{}:{}", file!(), line!()))?;
 
-            let logits = GLOBAL_INFERENCE_MODEL
-                .get()
-                .unwrap()
-                .write()
-                .unwrap()
-                .forward(&input, start_pos)
-                .context(format!("{}:{}", file!(), line!()))?;
+            let logits = self.model.forward(&input, start_pos).context(format!(
+                "{}:{}",
+                file!(),
+                line!()
+            ))?;
             let logits = logits
                 .squeeze(0)
                 .context(format!("{}:{}", file!(), line!()))?
@@ -202,21 +186,14 @@ impl TextGeneration {
                     .next_token(next_token)
                     .context(format!("{}:{}", file!(), line!()))?
             {
-                // print!("{t}");
                 answer.push_str(t.as_str());
             }
         }
 
         if let Some(rest) = self.tokenizer.decode_rest().map_err(E::msg)? {
-            // print!("{rest}");
             answer.push_str(rest.as_str());
         }
-        GLOBAL_INFERENCE_MODEL
-            .get()
-            .unwrap()
-            .write()
-            .unwrap()
-            .clear_kv_cache();
+        self.model.clear_kv_cache();
 
         Ok(answer)
     }
@@ -236,4 +213,41 @@ pub fn answer(question: &str, max_len: usize) -> Result<String> {
             return Err(e);
         }
     }
+}
+
+pub async fn hub_load_safetensors(
+    repo: &hf_hub::api::tokio::ApiRepo,
+    json_file: &str,
+) -> Result<Vec<std::path::PathBuf>> {
+    let json_file = repo
+        .get(json_file)
+        .await
+        .map_err(candle_core::Error::wrap)?;
+    let json_file = std::fs::File::open(json_file)?;
+    let json: serde_json::Value =
+        serde_json::from_reader(&json_file).map_err(candle_core::Error::wrap)?;
+    let weight_map = match json.get("weight_map") {
+        // None => candle_core::bail!("no weight map in {json_file:?}"),
+        None => return Err(anyhow!("no weight map in {json_file:?}")),
+        Some(serde_json::Value::Object(map)) => map,
+        // Some(_) => candle_core::bail!("weight map in {json_file:?} is not a map"),
+        Some(_) => return Err(anyhow!("weight map in {json_file:?} is not a map")),
+    };
+    let mut safetensors_files = std::collections::HashSet::new();
+    for value in weight_map.values() {
+        if let Some(file) = value.as_str() {
+            safetensors_files.insert(file.to_string());
+        }
+    }
+    // let safetensors_files = safetensors_files
+    //     .iter()
+    //     .map(|v| repo.get(v).await.map_err(candle_core::Error::wrap))
+    //     .collect::<Result<Vec<_>>>()?;
+
+    let mut vec_paths = vec![];
+    for f in safetensors_files {
+        let p = repo.get(f.as_str()).await?;
+        vec_paths.push(p);
+    }
+    Ok(vec_paths)
 }

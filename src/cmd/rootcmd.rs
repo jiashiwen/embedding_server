@@ -1,9 +1,8 @@
 use crate::cmd::{new_config_cmd, new_start_cmd, new_stop_cmd};
 use crate::configure::generate_default_config;
 use crate::configure::{get_config, get_current_config_yml, set_config};
-use crate::embedding::answer::{
-    init_global_pipeline, init_inference_model, GLOBAL_INFERENCE_MODEL, GLOBAL_PIPELINE,
-};
+
+use crate::embedding::answer::{init_global_pipeline, GLOBAL_PIPELINE};
 use crate::embedding::{init_model_and_tokenizer, GLOBAL_EMBEDDING_MODEL, GLOBAL_RUNTIME};
 use crate::httpserver;
 use crate::resources::init_resources;
@@ -114,9 +113,9 @@ fn cmd_match(matches: &ArgMatches) {
                 .get_or_init(init_model_and_tokenizer)
                 .await;
             GLOBAL_PIPELINE.get_or_init(init_global_pipeline).await;
-            GLOBAL_INFERENCE_MODEL
-                .get_or_init(init_inference_model)
-                .await;
+            // GLOBAL_INFERENCE_MODEL
+            //     .get_or_init(init_inference_model)
+            //     .await;
         });
 
         let async_http_server = async {
